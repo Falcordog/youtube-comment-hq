@@ -1,0 +1,26 @@
+
+name: Build Windows App
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Install Rust target
+        run: rustup target add x86_64-pc-windows-msvc
+      - name: Install deps
+        run: npm install
+      - name: Build Tauri app
+        run: npm run tauri build

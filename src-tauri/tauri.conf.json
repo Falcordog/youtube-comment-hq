@@ -1,0 +1,29 @@
+
+{
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "YouTubeCommentHQ",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "bundle": {
+      "identifier": "com.falcordog.commenthq",
+      "icon": ["icons/icon.icns", "icons/icon.ico"]
+    },
+    "updater": {
+      "active": false
+    },
+    "windows": [
+      {
+        "title": "YouTube Comment HQ",
+        "width": 800,
+        "height": 600
+      }
+    ]
+  }
+}
