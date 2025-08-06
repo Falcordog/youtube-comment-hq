@@ -25,17 +25,16 @@ jobs:
           node-version: '18'
 
       - name: Install Tauri CLI
-        run: |
-          cargo install tauri-cli
+        run: cargo install tauri-cli
 
-      - name: Install dependencies & build Tauri app
-        run: |
-          cd youtube-comment-hq      # ← move into the nested folder
-          npm install
-          npm run tauri build
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Build Tauri Windows App
+        run: npm run tauri build
 
       - name: Upload built artifact
         uses: actions/upload-artifact@v4
         with:
           name: Tauri-Windows-App
-          path: youtube-comment-hq/src-tauri/target/release/bundle
+          path: src-tauri/target/release/bundle
