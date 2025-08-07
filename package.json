@@ -1,20 +1,15 @@
-Set-Content -Path .\package.json -Encoding ascii -Value @'
 {
   "name": "youtube-comment-hq",
   "version": "0.1.0",
   "private": true,
+  "type": "commonjs",
   "scripts": {
-    "ai": "node ai-agent.js",
-    "orchestrate": "node orchestrator.js",
-    "gui:dev": "cd tauri-gui && npm run dev",
-    "gui:tauri": "cd tauri-gui && npx tauri dev",
     "build:orchestrator": "pkg orchestrator.js --target node18-win-x64 --output dist/orchestrator.exe"
-  },
-  "devDependencies": {
-    "pkg": "^5.8.1"
   },
   "dependencies": {
     "prompt-sync": "^4.2.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   }
 }
-'@
