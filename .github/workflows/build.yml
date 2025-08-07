@@ -1,42 +1,49 @@
-name: Build Windows Binary
+name: Package Orchestrator
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  workflow_dispatch:
+    paths:
+      - orchestrator.js
+      - package.json
+      - .github/workflows/build.yml
 
 jobs:
-  build:
+  build-win:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ${{ github.workspace }}   # <— root only
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - name: Debug paths
+        run: |
+          Write-Host "PWD: $(Get-Location)"
+          Get-ChildItem -Name
 
-      - name: Set up Node.js
+      - name: Verify required files
+        run: |
+          if (!(Test-Path "package.json")) { throw "package.json not found in repo root" }
+          if (!(Test-Path "orchestrator.js")) { throw "orchestrator.js not found in repo root" }
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli
-
-      - name: Install npm dependencies
+      - name: Install deps
         run: npm install
-        working-directory: youtube-comment-hq
 
-      - name: Build Tauri Windows App
-        run: npm run tauri build
-        working-directory: youtube-comment-hq
+      - name: Build orchestrator.exe
+        run: npx pkg orchestrator.js --target node18-win-x64 --output dist/orchestrator.exe
 
-      - name: Upload Built Artifact
+      - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: Tauri-Windows-App
-          path: youtube-comment-hq/src-tauri/target/release/bundle
+          name: orchestrator-windows-x64
+          path: dist/orchestrator.exe
