@@ -1,11 +1,12 @@
-// orchestrator.js
-// Minimal, packaged-safe CLI. Works when double-clicked.
-// - Uses EXE folder as working directory
-// - Requires only package.json (not orchestrator.js on disk)
-// - Pauses before exit unless --no-pause is passed
+// orchestrator.js (portable)
+// Portable CLI that works when double-clicked (no repo required).
+// - Uses EXE directory or %LOCALAPPDATA%\CommentHQ as workspace
+// - No dependency on orchestrator.js/package.json on disk
+// - Flags: --status, --workspace <path>, --open, --no-pause
 
 const fs = require("fs");
 const path = require("path");
+const cp = require("child_process");
 const readline = require("readline");
 
 function pauseIfInteractive() {
@@ -14,29 +15,93 @@ function pauseIfInteractive() {
   rl.question("\nPress Enter to exit...", () => rl.close());
 }
 
-function exists(p) {
-  try { return fs.existsSync(path.resolve(p)); } catch { return false; }
+function safeMkdir(p) {
+  try { fs.mkdirSync(p, { recursive: true }); } catch {}
+}
+
+function canWrite(dir) {
+  try {
+    const test = path.join(dir, ".wtest");
+    fs.writeFileSync(test, "ok");
+    fs.unlinkSync(test);
+    return true;
+  } catch { return false; }
+}
+
+function resolveWorkspace() {
+  // 1) explicit flag
+  const ix = process.argv.indexOf("--workspace");
+  if (ix > -1 && process.argv[ix + 1]) {
+    const p = path.resolve(process.argv[ix + 1]);
+    safeMkdir(p);
+    return p;
+  }
+  // 2) env
+  if (process.env.COMMENTHQ_WORKSPACE) {
+    const p = path.resolve(process.env.COMMENTHQ_WORKSPACE);
+    safeMkdir(p);
+    return p;
+  }
+  // 3) exe folder
+  const exeDir = path.dirname(process.execPath);
+  const exeWorkspace = path.join(exeDir, "workspace");
+  if (canWrite(exeDir)) {
+    safeMkdir(exeWorkspace);
+    return exeWorkspace;
+  }
+  // 4) LocalAppData
+  const appData = process.env.LOCALAPPDATA || process.env.APPDATA || exeDir;
+  const fallback = path.join(appData, "CommentHQ");
+  safeMkdir(fallback);
+  return fallback;
+}
+
+function openFolder(p) {
+  try {
+    if (process.platform === "win32") cp.spawn("explorer.exe", [p], { detached: true });
+    else if (process.platform === "darwin") cp.spawn("open", [p], { detached: true });
+    else cp.spawn("xdg-open", [p], { detached: true });
+  } catch {}
 }
 
 function main() {
-  // Ensure we run from the folder where the EXE lives
+  // Lock working dir to EXE folder for predictable behavior
   const exeDir = path.dirname(process.execPath);
   try { process.chdir(exeDir); } catch {}
 
-  console.log("YouTube Comment HQ Orchestrator");
-  console.log("- exeDir:", exeDir);
-  console.log("- cwd:", process.cwd());
+  const workspace = resolveWorkspace();
+  const cfgPath = path.join(workspace, "commenthq.json");
 
-  // For a packaged exe, orchestrator.js is inside the binary.
-  // Only require package.json to be present in repo root.
-  if (!exists("package.json")) {
-    console.error("Error: package.json not found in this folder.");
-    console.error("Tip: place orchestrator.exe in your repo root, or run it from a terminal in the repo root.");
+  // ensure config exists
+  if (!fs.existsSync(cfgPath)) {
+    const cfg = {
+      createdAt: new Date().toISOString(),
+      workspace,
+      version: "0.1.0",
+      notes: "Portable mode config. No repo required."
+    };
+    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+  }
+
+  // status mode
+  if (process.argv.includes("--status")) {
+    console.log("Comment HQ Orchestrator (portable)");
+    console.log("exeDir:", exeDir);
+    console.log("cwd:", process.cwd());
+    console.log("workspace:", workspace);
+    console.log("config:", cfgPath);
+    if (process.argv.includes("--open")) openFolder(workspace);
     return pauseIfInteractive();
   }
 
-  // TODO: add real tasks behind flags (kept minimal per directive)
-  console.log("Detected package.json. CLI is ready for tasks in future patches.");
+  // default behavior: show quick info and create folders we need.
+  console.log("Comment HQ Orchestrator (portable)");
+  console.log("Workspace:", workspace);
+  safeMkdir(path.join(workspace, "logs"));
+  safeMkdir(path.join(workspace, "drafts"));
+  console.log("Ready. Future tasks will run here without repo assumptions.");
+
+  if (process.argv.includes("--open")) openFolder(workspace);
   pauseIfInteractive();
 }
 
