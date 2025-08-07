@@ -1,0 +1,11 @@
+﻿{
+  "name": "youtube-comment-hq",
+  "version": "0.1.0",
+  "scripts": {
+    "ai": "node ai-agent.js",
+    "orchestrate": "node orchestrator.js"
+  },
+  "dependencies": {
+    "inquirer": "^9.0.0"
+  }
+}
