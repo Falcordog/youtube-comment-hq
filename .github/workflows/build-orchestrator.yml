@@ -1,36 +1,52 @@
+New-Item -ItemType Directory -Path .github\workflows -Force | Out-Null
+Set-Content -Path .github\workflows\build-orchestrator.yml -Encoding ascii -Value @'
 name: Package Orchestrator
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
     paths:
       - orchestrator.js
       - package.json
+      - .github/workflows/build-orchestrator.yml
 
 jobs:
-  build:
+  build-win:
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+        shell: pwsh
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Show workspace (debug)
+        run: |
+          Write-Host "PWD: $(Get-Location)"
+          Get-ChildItem -Name
+
+      - name: Verify required files
+        run: |
+          if (!(Test-Path "orchestrator.js")) { throw "orchestrator.js not found in repo root" }
+          if (!(Test-Path "package.json"))   { throw "package.json not found in repo root" }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: "18"
 
-      - name: Install pkg
-        run: npm install pkg --no-save
-
-      - name: Install prompt-sync
-        run: npm install prompt-sync --no-save
+      - name: Install dependencies
+        run: npm install
 
       - name: Build orchestrator.exe
-        run: npx pkg orchestrator.js --target node16-win-x64 --output orchestrator.exe
+        run: npx pkg orchestrator.js --target node18-win-x64 --output dist/orchestrator.exe
 
       - name: Upload executable
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: orchestrator-windows-x64
-          path: orchestrator.exe
+          path: dist/orchestrator.exe
+'@
