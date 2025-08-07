@@ -15,7 +15,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: ${{ github.workspace }}   # <— root only
+        working-directory: ${{ github.workspace }}  # run from repo root only
 
     steps:
       - name: Checkout
@@ -26,10 +26,8 @@ jobs:
           Write-Host "PWD: $(Get-Location)"
           Get-ChildItem -Name
 
-      - name: Verify required files
-        run: |
-          if (!(Test-Path "package.json")) { throw "package.json not found in repo root" }
-          if (!(Test-Path "orchestrator.js")) { throw "orchestrator.js not found in repo root" }
+      - name: Validate package.json
+        run: node -e "require('./package.json'); console.log('package.json OK');"
 
       - name: Setup Node
         uses: actions/setup-node@v4
