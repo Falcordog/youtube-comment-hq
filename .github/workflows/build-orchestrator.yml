@@ -1,0 +1,36 @@
+name: Package Orchestrator
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - orchestrator.js
+      - package.json
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Install pkg
+        run: npm install pkg --no-save
+
+      - name: Install prompt-sync
+        run: npm install prompt-sync --no-save
+
+      - name: Build orchestrator.exe
+        run: npx pkg orchestrator.js --target node16-win-x64 --output orchestrator.exe
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: orchestrator-windows-x64
+          path: orchestrator.exe
