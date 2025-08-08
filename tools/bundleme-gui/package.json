@@ -1,21 +1,23 @@
 {
   "name": "bundleme-gui",
-  "version": "0.1.0",
-  "description": "CommentHQ BundleMe GUI",
+  "version": "0.5.0",
+  "private": true,
+  "description": "CommentHQ BundleMe GUI (Electron, portable build)",
   "main": "main.js",
-  "author": "Falcordog",
-  "license": "MIT",
+  "type": "commonjs",
   "scripts": {
     "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder --win portable"
+    "dev": "electron .",
+    "build:win:portable": "electron-builder -w --portable"
   },
   "dependencies": {
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "electron": "^30.0.9",
+    "fs-extra": "^11.2.0",
+    "simple-git": "^3.25.0"
   },
   "devDependencies": {
-    "electron": "^30.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.13.3"
   },
   "build": {
     "appId": "com.commenthq.bundleme",
@@ -25,14 +27,15 @@
       "main.js",
       "preload.js",
       "renderer/**/*",
-      "lib/**/*",
-      ".env.example"
+      ".env.example",
+      "lib/**/*"
     ],
+    "directories": {
+      "output": "dist"
+    },
     "win": {
-      "target": [
-        { "target": "portable", "arch": [ "x64" ] }
-      ],
-      "artifactName": "BundleMe-GUI-\-portable.exe"
+      "target": "portable",
+      "artifactName": "BundleMe-GUI-${version}-portable.exe"
     }
   }
 }
