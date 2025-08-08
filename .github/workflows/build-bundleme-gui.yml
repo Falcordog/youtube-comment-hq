@@ -20,18 +20,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node (no cache)
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      # Safe cache: npm cache dir only, and only if it exists
+      - name: Get npm cache dir
+        id: npm-cache
+        run: |
+          $dir = npm config get cache
+          echo "dir=$dir" >> $env:GITHUB_OUTPUT
+
+      - name: Ensure npm cache dir exists
+        run: |
+          New-Item -ItemType Directory -Force -Path "${{ steps.npm-cache.outputs.dir }}" | Out-Null
+
+      - name: Cache npm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.npm-cache.outputs.dir }}
+          key: ${{ runner.os }}-node-${{ hashFiles('tools/bundleme-gui/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # Lockfile-friendly install: if lockfile exists -> ci, else install
       - name: Install deps
-        run: npm install
+        run: |
+          if (Test-Path package-lock.json) {
+            npm ci
+          } else {
+            npm install
+          }
 
       - name: Build portable EXE
-        run: npx electron-builder --win portable --publish never
+        run: npm run build:win
 
-      - name: Upload artifact
+      - name: Show dist tree (debug)
+        run: |
+          if (Test-Path dist) {
+            Get-ChildItem -Recurse dist | Format-List FullName, Length
+          } else {
+            Write-Host "dist/ does not exist"
+          }
+
+      - name: Upload GUI Executable
         uses: actions/upload-artifact@v4
         with:
           name: CommentHQ-BundleMe-GUI
