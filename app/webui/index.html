@@ -1,0 +1,104 @@
+<!doctype html><html><head><meta charset="utf-8"/>
+<title>CommentHQ</title>
+<style>
+body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#0f0f0f;color:#eee}
+header{background:#1b1b1b;padding:10px 12px;display:flex;gap:8px;align-items:center}
+.badge{padding:2px 6px;border:1px solid #444;border-radius:8px;background:#121212;margin-left:6px}
+main{padding:12px;max-width:900px;margin:0 auto}
+.card{border:1px solid #333;border-radius:12px;padding:10px;margin:12px 0;background:#141414}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1}
+input,select,textarea,button{background:#1a1a1a;color:#eee;border:1px solid #444;border-radius:10px;padding:8px}
+button{cursor:pointer}
+label{display:block;margin-bottom:4px;color:#bbb}
+small{color:#999}
+</style>
+</head><body>
+<header>
+  <strong>🧠 CommentHQ</strong>
+  <span id="h_ol" class="badge">OL: ?</span>
+  <span id="h_md" class="badge">Models: 0</span>
+  <span id="h_tt" class="badge">TTS: ?</span>
+</header>
+<main>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Draft</label>
+        <textarea id="t_draft" rows="4" placeholder="Type or paste your comment..."></textarea>
+      </div>
+      <div>
+        <label>Context (optional)</label>
+        <textarea id="t_ctx" rows="4" placeholder="Paste target comment here..."></textarea>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Model</label>
+        <select id="s_model"></select>
+      </div>
+      <div>
+        <label>Tone</label>
+        <select id="s_tone">
+          <option>neutral</option><option>affirm</option><option>counter</option>
+          <option>humor</option><option>ridicule</option>
+        </select>
+      </div>
+      <div style="align-self:end">
+        <button id="b_rewrite">🧠 Rewrite</button>
+        <button id="b_copy">📋 Copy</button>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Voice</label>
+        <select id="s_voice"></select>
+      </div>
+      <div>
+        <label>Rate</label>
+        <input id="i_rate" type="number" min="-10" max="10" step="1" value="0"/>
+      </div>
+      <div style="align-self:end">
+        <button id="b_tts">🔊 Speak</button>
+      </div>
+    </div>
+    <div class="card">
+      <label>Result</label>
+      <textarea id="t_out" rows="4" placeholder="Rewritten comment will appear here..."></textarea>
+      <small>Tip: Install the CHQ userscript on YouTube to send drafts here via the tray server.</small>
+    </div>
+  </div>
+</main>
+<script>
+const S = s => document.querySelector(s);
+async function health(){
+  const r = await fetch('/api/health'); const j = await r.json();
+  S('#h_ol').textContent = 'OL: ' + (j.ollama.ok ? 'ON' : 'OFF');
+  S('#h_md').textContent = 'Models: ' + (j.models||[]).length;
+  S('#h_tt').textContent = 'TTS: ' + (j.tts.backend||'?');
+  const m = S('#s_model'); m.innerHTML = (j.models||[]).map(n=>`<option>${n}</option>`).join('');
+  const v = S('#s_voice'); v.innerHTML = (j.tts.voices||[]).map(n=>`<option>${n}</option>`).join('');
+}
+async function rewrite(){
+  S('#t_out').value='[Rewriting…]';
+  const payload = {
+    text:S('#t_draft').value, context:S('#t_ctx').value,
+    tone:S('#s_tone').value, model:S('#s_model').value
+  };
+  const r = await fetch('/api/rewrite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const j = await r.json();
+  S('#t_out').value = j.ok ? (j.response||'') : ('[Error] '+(j.error||''));
+}
+async function speak(){
+  const payload = {
+    text: S('#t_out').value || S('#t_draft').value,
+    voice: S('#s_voice').value || '', rate: Number(S('#i_rate').value||0)
+  };
+  await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+}
+S('#b_rewrite').onclick = rewrite;
+S('#b_copy').onclick = ()=> navigator.clipboard.writeText(S('#t_out').value || S('#t_draft').value);
+S('#b_tts').onclick = speak;
+health();
+</script>
+</body></html>
