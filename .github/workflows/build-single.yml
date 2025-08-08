@@ -6,43 +6,51 @@ on:
 jobs:
   build-win:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: app   # <-- IMPORTANT: where package.json lives
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Print working dir
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print env (Windows-safe)
+        shell: pwsh
         run: |
-          pwd
-          ls -la
-          node -v
-          npm -v
+          Write-Host "PWD:" (Get-Location)
+          $PSVersionTable.PSVersion
+          Get-ChildItem -Force
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
+          cache-dependency-path: package-lock.json
 
-      - name: Ensure lockfile exists (create if missing)
+      - name: Assert package.json exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path package.json)) {
+            Write-Error "package.json not found in $(Get-Location)."
+            exit 1
+          }
+
+      - name: Ensure lockfile (create if missing)
         shell: pwsh
         run: |
           if (!(Test-Path package-lock.json)) {
-            Write-Host "No lockfile found. Generating with 'npm install --package-lock-only'..."
+            Write-Host "No package-lock.json; generating..."
             npm install --package-lock-only
           } else {
             Write-Host "Lockfile present."
           }
 
-      - name: Clean install from lockfile
+      - name: Clean install
         run: npm ci
 
-      - name: Build portable exe
-        run: npx electron-builder --win portable --config electron-builder.yml
+      - name: Build orchestrator.exe
+        run: npm run build:orchestrator
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: commenthq-win64
-          path: app/dist/**
+          name: orchestrator-win64
+          path: dist/**
