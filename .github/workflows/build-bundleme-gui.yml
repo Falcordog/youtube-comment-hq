@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          # IMPORTANT: path is from repo root
+          # NOTE: path is from repo root
           cache-dependency-path: tools/bundleme-gui/package-lock.json
 
       - name: Install deps
