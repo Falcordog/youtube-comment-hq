@@ -1,0 +1,39 @@
+name: Build BundleMe GUI
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-bundleme-gui.yml'
+      - 'tools/bundleme-gui/**'
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/bundleme-gui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: tools/bundleme-gui/package-lock.json
+
+      - name: Install deps
+        run: npm ci || npm i
+
+      - name: Build portable exe
+        run: npx electron-builder -w --portable
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BundleMe-GUI-win-portable
+          path: tools/bundleme-gui/dist/*.exe
+          if-no-files-found: error
