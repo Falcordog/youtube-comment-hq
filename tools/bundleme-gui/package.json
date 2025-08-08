@@ -1,39 +1,38 @@
 {
-  "name": "bundleme-gui",
-  "version": "0.5.0",
+  "name": "commenthq-bundleme-gui",
+  "version": "0.6.0",
   "private": true,
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder --win portable --publish never"
+    "dev": "electron .",
+    "build:win": "electron-builder --win portable --publish never",
+    "pack": "electron-builder --dir"
   },
   "dependencies": {
-    "dotenv": "^16.4.5",
-    "fs-extra": "^11.2.0"
+    "electron": "^31.4.0"
   },
   "devDependencies": {
-    "electron": "^30.0.6",
     "electron-builder": "^24.13.3"
   },
   "build": {
     "appId": "com.commenthq.bundleme",
     "productName": "CommentHQ BundleMe GUI",
     "directories": {
-      "buildResources": "build",
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "files": [
       "main.js",
       "preload.js",
-      "renderer/**/*",
-      ".env.example"
+      "renderer/**",
+      "package.json"
     ],
     "win": {
       "target": [
-        "portable"
+        { "target": "portable", "arch": ["x64"] }
       ],
-      "artifactName": "CommentHQ-BundleMe-GUI-${version}.exe"
+      "artifactName": "CommentHQ-BundleMe-GUI-${version}-portable.exe"
     }
   }
 }
