@@ -1,4 +1,3 @@
-# .github/workflows/build-bundleme-gui.yml
 name: Build BundleMe GUI
 
 on:
@@ -20,15 +19,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node 20 with npm cache
+      # Use cache ONLY if a lockfile exists
+      - name: Setup Node with npm cache
+        if: ${{ hashFiles('tools/bundleme-gui/package-lock.json') != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          # NOTE: path is from repo root
           cache-dependency-path: tools/bundleme-gui/package-lock.json
 
-      - name: Install deps
+      # Fallback (first run, no lockfile yet)
+      - name: Setup Node (no cache)
+        if: ${{ hashFiles('tools/bundleme-gui/package-lock.json') == '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps (create lockfile if missing)
         run: |
           if (Test-Path package-lock.json) {
             npm ci
