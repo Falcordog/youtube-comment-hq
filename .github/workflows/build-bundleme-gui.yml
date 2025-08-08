@@ -1,3 +1,4 @@
+# .github/workflows/build-bundleme-gui.yml
 name: Build BundleMe GUI
 
 on:
@@ -24,17 +25,16 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install deps (create lockfile if missing)
+      # tiny sanity check so we fail early if JSON is broken again
+      - name: Validate package.json
+        run: node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); console.log('package.json OK');"
+
+      - name: Install deps
         run: |
-          if (Test-Path package-lock.json) {
-            npm ci
-          } else {
-            npm i
-            npm i --package-lock-only
-          }
+          if (Test-Path package-lock.json) { npm ci } else { npm i && npm i --package-lock-only }
 
       - name: Build portable exe
-        run: npx electron-builder -w --portable
+        run: npm run build:win:portable
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
