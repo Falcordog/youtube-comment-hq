@@ -18,19 +18,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20.x (with npm cache)
+      - name: Setup Node 20.x
         uses: actions/setup-node@v4
         with:
           node-version: "20.19.4"
-          cache: "npm"
-          cache-dependency-path: tools/bundleme-gui/package-lock.json
 
-      # Ensure a lockfile exists or npm ci will fail
+      # Ensure a lockfile exists (so cache key is stable) before we restore any cache
       - name: Ensure lockfile if missing
         run: |
           if (-not (Test-Path package-lock.json)) {
             npm install --package-lock-only --no-audit --no-fund
           }
+
+      # Detect the real npm cache dir on this runner (it’s often C:\npm\cache on GH Windows images)
+      - name: Detect npm cache dir
+        id: npm-cache
+        run: |
+          $dir = (npm config get cache).Trim()
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+
+      # Make sure the directory exists so actions/cache doesn’t complain
+      - name: Ensure npm cache dir exists
+        run: |
+          New-Item -ItemType Directory -Force -Path "${{ steps.npm-cache.outputs.dir }}" | Out-Null
+
+      # Restore npm cache, now that dir + lockfile exist
+      - name: Restore npm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.npm-cache.outputs.dir }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('tools/bundleme-gui/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Install deps
         run: npm ci --no-audit --no-fund
