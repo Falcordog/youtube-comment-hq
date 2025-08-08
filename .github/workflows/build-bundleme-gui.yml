@@ -1,12 +1,10 @@
-name: Build BundleMe GUI (portable)
+name: Build BundleMe GUI (Windows)
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
     paths:
       - "tools/bundleme-gui/**"
-      - ".github/workflows/build-bundleme-gui.yml"
 
 jobs:
   build-windows:
@@ -20,65 +18,63 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Node 20
+      - name: Show tree (debug)
+        run: Get-ChildItem -Force
+
+      - name: Setup Node 20.x
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.19.4"
+          cache: "npm"
+          cache-dependency-path: tools/bundleme-gui/package-lock.json
 
-      # Safe npm cache (only if it exists)
-      - name: Get npm cache dir
-        id: npm-cache
+      # Lockfile is nice-to-have, not mandatory
+      - name: Ensure lockfile if missing
         run: |
-          $dir = npm config get cache
-          echo "dir=$dir" >> $env:GITHUB_OUTPUT
+          if (-not (Test-Path package-lock.json)) {
+            Write-Host "No lockfile; creating one"
+            npm install --package-lock-only --no-audit --no-fund
+          }
 
-      - name: Ensure npm cache dir exists
-        run: |
-          New-Item -ItemType Directory -Force -Path "${{ steps.npm-cache.outputs.dir }}" | Out-Null
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
 
-      - name: Cache npm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.npm-cache.outputs.dir }}
-          key: ${{ runner.os }}-node-${{ hashFiles('tools/bundleme-gui/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install deps (lockfile if present)
-        run: |
-          if (Test-Path package-lock.json) { npm ci } else { npm install }
-
-      - name: Print electron-builder version
+      - name: Verify electron-builder
         run: npx electron-builder --version
 
-      - name: Build portable EXE
+      - name: Build EXE (portable)
         run: npm run build:win
-        env:
-          CI: "true"
 
-      - name: Show dist tree (debug)
-        run: |
-          if (Test-Path dist) {
-            Write-Host "== DIST TREE =="
-            Get-ChildItem -Recurse dist | Format-Table -AutoSize
-          } else {
-            Write-Error "dist/ does not exist (build likely failed)."
-          }
+      - name: List dist
+        run: Get-ChildItem -Force dist
 
-      - name: Find built EXE path
-        id: findexe
-        run: |
-          $exe = Get-ChildItem -Path dist -Recurse -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $exe) {
-            Write-Error "No .exe found under dist/. Check the previous step's tree and build logs."
-            exit 1
-          }
-          Write-Host "Found:" $exe.FullName
-          "exePath=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-
-      - name: Upload GUI Executable
+      - name: Upload GUI Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CommentHQ-BundleMe-GUI
-          path: ${{ steps.findexe.outputs.exePath }}
+          path: tools/bundleme-gui/dist/*.exe
+          if-no-files-found: error
+
+      - name: Emit telemetry
+        run: |
+          New-Item -ItemType Directory -Force -Path .commenthq | Out-Null
+          $meta = @{
+            repo = "${{ github.repository }}"
+            runId = "${{ github.run_id }}"
+            sha = "${{ github.sha }}"
+            os = "${{ runner.os }}"
+            node = (node -v)
+            npm = (npm -v)
+            builtAt = (Get-Date -Format o)
+            artifact = (Get-ChildItem dist -Filter *.exe | Select-Object -First 1 | ForEach-Object { $_.Name })
+          } | ConvertTo-Json -Depth 5
+          $meta | Set-Content .commenthq/telemetry.json -Encoding UTF8
+          "# Build Telemetry`n`n\`\`\`json`n$meta`n\`\`\`" | Set-Content .commenthq/TELEMETRY.md -Encoding UTF8
+        working-directory: tools/bundleme-gui
+
+      - name: Upload telemetry
+        uses: actions/upload-artifact@v4
+        with:
+          name: CommentHQ-BundleMe-GUI-Telemetry
+          path: tools/bundleme-gui/.commenthq/*
           if-no-files-found: error
