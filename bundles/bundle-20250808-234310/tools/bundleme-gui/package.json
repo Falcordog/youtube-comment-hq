@@ -1,0 +1,38 @@
+{
+  "name": "bundleme-gui",
+  "version": "0.1.0",
+  "description": "CommentHQ BundleMe GUI",
+  "main": "main.js",
+  "author": "Falcordog",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.commenthq.bundleme",
+    "productName": "BundleMe GUI",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "lib/**/*",
+      ".env.example"
+    ],
+    "win": {
+      "target": [
+        { "target": "portable", "arch": [ "x64" ] }
+      ],
+      "artifactName": "BundleMe-GUI-\-portable.exe"
+    }
+  }
+}
