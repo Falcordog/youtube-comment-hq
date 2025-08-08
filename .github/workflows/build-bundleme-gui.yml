@@ -1,16 +1,17 @@
-# .github/workflows/build-bundleme-gui.yml
-name: Build BundleMe GUI
+name: Build BundleMe GUI (portable)
 
 on:
   workflow_dispatch:
   push:
+    branches: [ main ]
     paths:
-      - '.github/workflows/build-bundleme-gui.yml'
-      - 'tools/bundleme-gui/**'
+      - "tools/bundleme-gui/**"
+      - ".github/workflows/build-bundleme-gui.yml"
 
 jobs:
-  build-win:
+  build-windows:
     runs-on: windows-latest
+
     defaults:
       run:
         shell: pwsh
@@ -23,22 +24,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "tools/bundleme-gui/package-lock.json"
 
-      # tiny sanity check so we fail early if JSON is broken again
-      - name: Validate package.json
-        run: node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); console.log('package.json OK');"
-
+      # Use npm install (not npm ci) to avoid lockfile hard-fail on first run.
       - name: Install deps
-        run: |
-          if (Test-Path package-lock.json) { npm ci } else { npm i && npm i --package-lock-only }
+        run: npm install
 
-      - name: Build portable exe
-        run: npm run build:win:portable
+      - name: Build portable EXE (electron-builder)
+        run: npx electron-builder --win portable --publish never
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BundleMe-GUI-win-portable
-          path: dist/*.exe
+          name: CommentHQ-BundleMe-GUI
+          path: tools/bundleme-gui/dist/*.exe
           if-no-files-found: error
