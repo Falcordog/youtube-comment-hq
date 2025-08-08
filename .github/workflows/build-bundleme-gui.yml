@@ -18,21 +18,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show tree (debug)
-        run: Get-ChildItem -Force
-
-      - name: Setup Node 20.x
+      - name: Setup Node 20.x (with npm cache)
         uses: actions/setup-node@v4
         with:
           node-version: "20.19.4"
           cache: "npm"
           cache-dependency-path: tools/bundleme-gui/package-lock.json
 
-      # Lockfile is nice-to-have, not mandatory
+      # Ensure a lockfile exists or npm ci will fail
       - name: Ensure lockfile if missing
         run: |
           if (-not (Test-Path package-lock.json)) {
-            Write-Host "No lockfile; creating one"
             npm install --package-lock-only --no-audit --no-fund
           }
 
@@ -69,8 +65,7 @@ jobs:
             artifact = (Get-ChildItem dist -Filter *.exe | Select-Object -First 1 | ForEach-Object { $_.Name })
           } | ConvertTo-Json -Depth 5
           $meta | Set-Content .commenthq/telemetry.json -Encoding UTF8
-          "# Build Telemetry`n`n\`\`\`json`n$meta`n\`\`\`" | Set-Content .commenthq/TELEMETRY.md -Encoding UTF8
-        working-directory: tools/bundleme-gui
+          "# Build Telemetry`n`n```json`n$meta`n```" | Set-Content .commenthq/TELEMETRY.md -Encoding UTF8
 
       - name: Upload telemetry
         uses: actions/upload-artifact@v4
