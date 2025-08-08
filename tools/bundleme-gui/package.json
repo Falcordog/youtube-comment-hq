@@ -1,7 +1,9 @@
 {
   "name": "commenthq-bundleme-gui",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
+  "description": "GUI to push zipped/folder bundles into the CommentHQ repo and fetch telemetry snapshots.",
+  "author": "Falcordog",
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
@@ -9,10 +11,8 @@
     "build:win": "electron-builder --win portable --publish never",
     "pack": "electron-builder --dir"
   },
-  "dependencies": {
-    "electron": "^31.4.0"
-  },
   "devDependencies": {
+    "electron": "^31.4.0",
     "electron-builder": "^24.13.3"
   },
   "build": {
