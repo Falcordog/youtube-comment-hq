@@ -8,16 +8,34 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: app
+        working-directory: app   # <-- IMPORTANT: where package.json lives
     steps:
       - uses: actions/checkout@v4
+
+      - name: Print working dir
+        run: |
+          pwd
+          ls -la
+          node -v
+          npm -v
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
 
-      - name: Install dependencies
+      - name: Ensure lockfile exists (create if missing)
+        shell: pwsh
+        run: |
+          if (!(Test-Path package-lock.json)) {
+            Write-Host "No lockfile found. Generating with 'npm install --package-lock-only'..."
+            npm install --package-lock-only
+          } else {
+            Write-Host "Lockfile present."
+          }
+
+      - name: Clean install from lockfile
         run: npm ci
 
       - name: Build portable exe
