@@ -1,0 +1,13 @@
+appId: com.commenthq.app
+productName: CommentHQ
+asar: true
+directories:
+  output: dist
+files:
+  - "**/*"
+  - "!dist/**"
+win:
+  target:
+    - portable
+portable:
+  artifactName: "${productName}-win64-portable-${version}.exe"
