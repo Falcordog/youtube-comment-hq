@@ -1,0 +1,44 @@
+name: Apply Diff (AI)
+on:
+  workflow_dispatch:
+    inputs:
+      diff_b64:
+        description: "Base64 of a unified diff/patch"
+        required: true
+      pr_title:
+        description: "PR title"
+        required: false
+        default: "AI diff: apply changes"
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode patch
+        run: |
+          echo "${{ inputs.diff_b64 }}" | base64 -d > changes.patch
+      - name: New branch
+        run: |
+          TS=$(date +%Y%m%d-%H%M%S)
+          BR="ai/diff-$TS"
+          git checkout -b "$BR"
+          echo "BRANCH=$BR" >> $GITHUB_ENV
+      - name: Apply patch
+        run: |
+          git config user.name "commenthq-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git apply --whitespace=fix changes.patch
+          git add -A
+          git commit -m "${{ inputs.pr_title }}"
+          git push --set-upstream origin "$BRANCH"
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: ${{ inputs.pr_title }}
+          branch: ${{ env.BRANCH }}
+          base: main
+          commit-message: ${{ inputs.pr_title }}
