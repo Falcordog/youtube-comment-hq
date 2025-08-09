@@ -77,7 +77,6 @@ jobs:
           $metaJson = $meta | ConvertTo-Json -Depth 5
           $metaJson | Set-Content .commenthq/telemetry.json -Encoding UTF8
 
-          # Use an expandable here-string to avoid missing-terminator errors
           $telemetry = @"
 # Build Telemetry
 
