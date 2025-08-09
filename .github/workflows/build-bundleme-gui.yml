@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "tools/bundleme-gui/**"
+      - ".github/workflows/build-bundleme-gui.yml"
 
 jobs:
   build-windows:
@@ -18,50 +19,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20.x
+      - name: Setup Node 20.x (with npm cache)
         uses: actions/setup-node@v4
         with:
           node-version: "20.19.4"
+          cache: "npm"
+          cache-dependency-path: tools/bundleme-gui/package-lock.json
 
-      # Ensure a lockfile exists (so cache key is stable) before we restore any cache
       - name: Ensure lockfile if missing
         run: |
           if (-not (Test-Path package-lock.json)) {
             npm install --package-lock-only --no-audit --no-fund
           }
 
-      # Detect the real npm cache dir on this runner (it’s often C:\npm\cache on GH Windows images)
-      - name: Detect npm cache dir
-        id: npm-cache
-        run: |
-          $dir = (npm config get cache).Trim()
-          "dir=$dir" >> $env:GITHUB_OUTPUT
-
-      # Make sure the directory exists so actions/cache doesn’t complain
-      - name: Ensure npm cache dir exists
-        run: |
-          New-Item -ItemType Directory -Force -Path "${{ steps.npm-cache.outputs.dir }}" | Out-Null
-
-      # Restore npm cache, now that dir + lockfile exist
-      - name: Restore npm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.npm-cache.outputs.dir }}
-          key: ${{ runner.os }}-npm-${{ hashFiles('tools/bundleme-gui/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
       - name: Install deps
         run: npm ci --no-audit --no-fund
 
-      - name: Verify electron-builder
+      - name: Show electron-builder version
         run: npx electron-builder --version
 
       - name: Build EXE (portable)
+        env:
+          DEBUG: electron-builder
         run: npm run build:win
 
-      - name: List dist
-        run: Get-ChildItem -Force dist
+      - name: Verify & list dist
+        run: |
+          if (-not (Test-Path dist)) { throw "dist/ not created" }
+          $exe = Get-ChildItem -Path dist -Filter *.exe -ErrorAction SilentlyContinue
+          if (-not $exe) {
+            Write-Host "No EXE produced. Dist contents:"
+            Get-ChildItem -Recurse dist | Format-List
+            throw "No .exe in dist/"
+          }
+          Get-ChildItem -Force dist
 
       - name: Upload GUI Artifact
         uses: actions/upload-artifact@v4
@@ -70,25 +61,25 @@ jobs:
           path: tools/bundleme-gui/dist/*.exe
           if-no-files-found: error
 
-      - name: Emit telemetry
+      - name: Emit telemetry (robust quoting)
         run: |
           New-Item -ItemType Directory -Force -Path .commenthq | Out-Null
           $meta = @{
-            repo = "${{ github.repository }}"
-            runId = "${{ github.run_id }}"
-            sha = "${{ github.sha }}"
-            os = "${{ runner.os }}"
-            node = (node -v)
-            npm = (npm -v)
+            repo    = "${{ github.repository }}"
+            runId   = "${{ github.run_id }}"
+            sha     = "${{ github.sha }}"
+            os      = "${{ runner.os }}"
+            node    = (node -v)
+            npm     = (npm -v)
             builtAt = (Get-Date -Format o)
-            artifact = (Get-ChildItem dist -Filter *.exe | Select-Object -First 1 | ForEach-Object { $_.Name })
-          } | ConvertTo-Json -Depth 5
-          $meta | Set-Content .commenthq/telemetry.json -Encoding UTF8
-          "# Build Telemetry`n`n```json`n$meta`n```" | Set-Content .commenthq/TELEMETRY.md -Encoding UTF8
+            artifact= (Get-ChildItem dist -Filter *.exe | Select-Object -First 1 | ForEach-Object { $_.Name })
+          }
+          $metaJson = $meta | ConvertTo-Json -Depth 5
+          $metaJson | Set-Content .commenthq/telemetry.json -Encoding UTF8
 
-      - name: Upload telemetry
-        uses: actions/upload-artifact@v4
-        with:
-          name: CommentHQ-BundleMe-GUI-Telemetry
-          path: tools/bundleme-gui/.commenthq/*
-          if-no-files-found: error
+          # Use an expandable here-string to avoid missing-terminator errors
+          $telemetry = @"
+# Build Telemetry
+
+```json
+$metaJson
