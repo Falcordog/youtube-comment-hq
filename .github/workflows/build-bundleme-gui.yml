@@ -1,11 +1,10 @@
-name: Build BundleMe GUI (Windows)
+name: Build CommentHQ BundleMe GUI
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - "tools/bundleme-gui/**"
-      - ".github/workflows/build-bundleme-gui.yml"
+    tags:
+      - 'gui-v*'
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -13,82 +12,40 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: tools/bundleme-gui
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20.x (with npm cache)
+      - name: Use Node.js 20 LTS (CI-stable)
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.4"
-          cache: "npm"
-          cache-dependency-path: tools/bundleme-gui/package-lock.json
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            CommentHQ-BundleMe-GUI/package-lock.json
 
-      - name: Ensure lockfile if missing
+      - name: Assert lockfile present
         run: |
-          if (-not (Test-Path package-lock.json)) {
-            npm install --package-lock-only --no-audit --no-fund
+          if (!(Test-Path 'CommentHQ-BundleMe-GUI/package-lock.json')) {
+            Write-Error 'Missing lockfile: CommentHQ-BundleMe-GUI/package-lock.json'
           }
 
       - name: Install deps
-        run: npm ci --no-audit --no-fund
+        working-directory: CommentHQ-BundleMe-GUI
+        run: npm ci
 
-      - name: Show electron-builder version
-        run: npx electron-builder --version
+      - name: Build portable exe
+        working-directory: CommentHQ-BundleMe-GUI
+        run: npm run build:portable
 
-      - name: Build EXE (portable)
-        env:
-          DEBUG: electron-builder
-        run: npm run build:win
-
-      - name: Verify & list dist
-        run: |
-          if (-not (Test-Path dist)) { throw "dist/ not created" }
-          $exe = Get-ChildItem -Path dist -Filter *.exe -ErrorAction SilentlyContinue
-          if (-not $exe) {
-            Write-Host "No EXE produced. Dist contents:"
-            if (Test-Path dist) { Get-ChildItem -Recurse dist | Format-List }
-            throw "No .exe in dist/"
-          }
-          Get-ChildItem -Force dist
-
-      - name: Upload GUI Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CommentHQ-BundleMe-GUI
-          path: tools/bundleme-gui/dist/*.exe
-          if-no-files-found: error
+          name: CommentHQ-BundleMe-GUI-portable
+          path: CommentHQ-BundleMe-GUI/dist/*.exe
 
-      - name: Emit telemetry (robust quoting)
-        run: |
-          New-Item -ItemType Directory -Force -Path .commenthq | Out-Null
-          $meta = @{
-            repo    = "${{ github.repository }}"
-            runId   = "${{ github.run_id }}"
-            sha     = "${{ github.sha }}"
-            os      = "${{ runner.os }}"
-            node    = (node -v)
-            npm     = (npm -v)
-            builtAt = (Get-Date -Format o)
-            artifact= (Get-ChildItem dist -Filter *.exe | Select-Object -First 1 | ForEach-Object { $_.Name })
-          }
-          $metaJson = $meta | ConvertTo-Json -Depth 5
-          $metaJson | Set-Content .commenthq/telemetry.json -Encoding UTF8
-
-          $telemetry = @"
-          # Build Telemetry
-
-          ```json
-          $($metaJson)
-          ```
-          "@
-          $telemetry | Set-Content .commenthq/TELEMETRY.md -Encoding UTF8
-
-      - name: Upload telemetry
-        uses: actions/upload-artifact@v4
+      - name: Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/gui-v')
+        uses: softprops/action-gh-release@v2
         with:
-          name: CommentHQ-BundleMe-GUI-Telemetry
-          path: tools/bundleme-gui/.commenthq/*
-          if-no-files-found: error
+          files: CommentHQ-BundleMe-GUI/dist/*.exe
