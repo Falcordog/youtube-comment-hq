@@ -78,20 +78,13 @@ jobs:
           $metaJson | Set-Content .commenthq/telemetry.json -Encoding UTF8
 
           $telemetry = @"
-# Build Telemetry
+          # Build Telemetry
 
-```json
-$metaJson
-# (continue right after the line: $telemetry = @" )
-
-# Build Telemetry
-
-<json>
-$metaJson
-</json>
-"@
+          ```json
+          $($metaJson)
+          ```
+          "@
           $telemetry | Set-Content .commenthq/TELEMETRY.md -Encoding UTF8
-        working-directory: tools/bundleme-gui
 
       - name: Upload telemetry
         uses: actions/upload-artifact@v4
