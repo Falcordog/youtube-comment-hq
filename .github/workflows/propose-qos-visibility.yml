@@ -199,4 +199,145 @@ jobs:
         shell: bash
         run: |
           mkdir -p tools/bundleme-gui/renderer
-          cat > tools/bundleme-gui/package.json <<
+          cat > tools/bundleme-gui/package.json << 'JSON'
+          {
+            "name": "commenthq-bundleme-gui",
+            "version": "0.7.1",
+            "private": true,
+            "description": "CommentHQ Bundle Me GUI (portable Windows builder)",
+            "author": "Falcordog",
+            "main": "main.js",
+            "scripts": {
+              "start": "electron .",
+              "build:win": "electron-builder --win portable --x64",
+              "pack": "electron-builder --dir"
+            },
+            "dependencies": {
+              "keytar": "^7.9.0",
+              "node-fetch": "^2.6.9"
+            },
+            "devDependencies": {
+              "electron": "30.0.10",
+              "electron-builder": "26.0.12"
+            },
+            "build": {
+              "appId": "com.commenthq.bundleme",
+              "productName": "CommentHQ BundleMe GUI",
+              "asar": true,
+              "directories": { "output": "dist" },
+              "files": [ "main.js", "preload.js", "renderer/**/*", "package.json" ],
+              "win": { "target": [ "portable" ], "artifactName": "CommentHQ-BundleMe-GUI-${version}-portable.exe" }
+            }
+          }
+          JSON
+
+          cat > tools/bundleme-gui/main.js << 'JS'
+          const { app, BrowserWindow } = require('electron');
+          const path = require('path');
+
+          function createWindow() {
+            const win = new BrowserWindow({
+              width: 900, height: 640,
+              webPreferences: {
+                preload: path.join(__dirname, 'preload.js'),
+                contextIsolation: true,
+                nodeIntegration: false
+              }
+            });
+            win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+          }
+
+          app.whenReady().then(createWindow);
+          app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+          // === CommentHQ Visibility IPC (GitHub API) ===
+          const { ipcMain } = require('electron');
+          const keytar = require('keytar');
+          const fetch = require('node-fetch');
+          const SERVICE = 'commenthq.github';
+          const ACCOUNT = 'repo-admin-token';
+
+          async function gh(path, method, body) {
+            const token = await keytar.getPassword(SERVICE, ACCOUNT);
+            if (!token) throw new Error('Missing GitHub token');
+            const res = await fetch(`https://api.github.com${path}`, {
+              method,
+              headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github+json',
+                'Content-Type': 'application/json'
+              },
+              body: body ? JSON.stringify(body) : undefined
+            });
+            if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}`);
+            return res.json();
+          }
+
+          ipcMain.handle('repo:getToken', async () => Boolean(await keytar.getPassword(SERVICE, ACCOUNT)));
+          ipcMain.handle('repo:saveToken', async (_e, token) => { await keytar.setPassword(SERVICE, ACCOUNT, token); return true; });
+          ipcMain.handle('repo:clearToken', async () => { await keytar.deletePassword(SERVICE, ACCOUNT); return true; });
+
+          ipcMain.handle('repo:get', async (_e, { owner, repo }) => gh(`/repos/${owner}/${repo}`, 'GET'));
+          ipcMain.handle('repo:setVisibility', async (_e, { owner, repo, makePrivate }) =>
+            gh(`/repos/${owner}/${repo}`, 'PATCH', { private: !!makePrivate }));
+          ipcMain.handle('repo:dispatchAutoreprivate', async (_e, { owner, repo, minutes }) =>
+            gh(`/repos/${owner}/${repo}/actions/workflows/toggle-visibility.yml/dispatches`, 'POST', {
+              ref: 'main',
+              inputs: { visibility: 'private', delayMinutes: String(minutes||15) }
+            }));
+          // === /Visibility IPC ===
+          JS
+
+          cat > tools/bundleme-gui/preload.js << 'JS'
+          const { contextBridge, ipcRenderer } = require('electron');
+          contextBridge.exposeInMainWorld('repo', {
+            hasToken: () => ipcRenderer.invoke('repo:getToken'),
+            saveToken: (t) => ipcRenderer.invoke('repo:saveToken', t),
+            clearToken: () => ipcRenderer.invoke('repo:clearToken'),
+            get: (o,r) => ipcRenderer.invoke('repo:get', { owner:o, repo:r }),
+            setVisibility: (o,r,makePrivate) => ipcRenderer.invoke('repo:setVisibility', { owner:o, repo:r, makePrivate }),
+            scheduleReprivate: (o,r,mins) => ipcRenderer.invoke('repo:dispatchAutoreprivate', { owner:o, repo:r, minutes: mins })
+          });
+          JS
+
+          cat > tools/bundleme-gui/renderer/index.html << 'HTML'
+          <!doctype html>
+          <html>
+            <head>
+              <meta charset="utf-8" />
+              <title>CommentHQ BundleMe GUI</title>
+              <style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;padding:16px}</style>
+            </head>
+            <body>
+              <h1>CommentHQ BundleMe GUI</h1>
+              <p>Portable EXE builder + Repo Visibility controls.</p>
+
+              <section id="vis-panel" style="margin-top:16px;padding:12px;border:1px solid #ccc;border-radius:10px">
+                <h2 style="margin:0 0 8px 0">Repo Visibility</h2>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <label>Repo: <input id="repo-slug" placeholder="Falcordog/youtube-comment-hq" style="width:260px"></label>
+                  <label>Token: <input id="gh-token" type="password" placeholder="Fine-grained PAT (admin: this repo only)" style="width:320px"></label>
+                  <button id="save-token">Save token</button>
+                  <button id="clear-token">Clear token</button>
+                </div>
+                <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+                  <button id="btn-public">Make Public (15m auto-private)</button>
+                  <button id="btn-private">Make Private Now</button>
+                  <button id="btn-status">Check Status</button>
+                </div>
+                <pre id="vis-log" style="margin-top:8px;background:#f8f8f8;padding:8px;border-radius:8px;max-height:200px;overflow:auto"></pre>
+              </section>
+
+              <script src="renderer.js"></script>
+            </body>
+          </html>
+          HTML
+
+          cat > tools/bundleme-gui/renderer/renderer.js << 'JS'
+          console.log('BundleMe GUI loaded');
+          (function(){
+            const $ = (s)=>document.querySelector(s);
+            const log = (m)=>{ const el=$("#vis-log"); if(!el) return; el.textContent += (m+"\\n"); el.scrollTop=el.scrollHeight; };
+            const slugEl=$("#repo-slug"), tokEl=$("#gh-token");
+            $("#save-token")?.addEventListener("click", async ()=>{
+              const t = tokEl.value.trim(); if(!t){ log("
