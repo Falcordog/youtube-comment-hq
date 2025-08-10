@@ -1,38 +1,69 @@
-name: Build CommentHQ Portable (QoS)
+name: CommentHQ Portable (CI Live — QoS)
 
 on:
   workflow_dispatch:
   push:
-    tags:
-      - 'v*.*.*'
+    tags: ['v*.*.*']
 
 jobs:
-  build:
+  win-portable:
     runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/bundleme-gui
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Use Node.js 20.19.4
+      - name: Setup Node (pinned)
         uses: actions/setup-node@v4
         with:
-          node-version: 20.19.4
+          node-version: '20.19.4'
+          cache: npm
+          cache-dependency-path: tools/bundleme-gui/package-lock.json
 
-      - name: Smoke check package.json
-        run: node -e "require('./package.json')"
+      - name: Ensure lockfile (deterministic)
+        run: |
+          if (-not (Test-Path package-lock.json)) {
+            npm install --package-lock-only --no-audit --no-fund
+          }
 
       - name: Install deps (ci)
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
-      - name: Build GUI
-        run: npm run build
+      - name: Smoke — package.json loads
+        run: node -e "require('./package.json'); console.log('package.json OK')"
 
-      - name: List dist contents
-        run: Get-ChildItem -Recurse dist
+      - name: Show electron-builder version
+        run: npx electron-builder --version
 
-      - name: Upload portable exe
+      - name: Build EXE (portable)
+        env:
+          DEBUG: electron-builder
+        run: npm run build:win
+
+      - name: Verify dist and list
+        run: |
+          if (-not (Test-Path dist)) { throw 'dist/ not created' }
+          $exe = Get-ChildItem -Path dist -Filter *.exe -ErrorAction SilentlyContinue
+          if (-not $exe) {
+            Write-Host "No EXE produced. Dist contents:"
+            if (Test-Path dist) { Get-ChildItem -Recurse dist | Format-List }
+            throw "No .exe in dist/"
+          }
+          Get-ChildItem -Force dist
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CommentHQ-Portable
-          path: dist/*.exe
+          name: CommentHQ-BundleMe-GUI
+          path: tools/bundleme-gui/dist/*.exe
+          if-no-files-found: error
+
+      - name: Release on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tools/bundleme-gui/dist/*.exe
+          generate_release_notes: true
