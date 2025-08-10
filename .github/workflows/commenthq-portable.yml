@@ -2,9 +2,6 @@ name: CommentHQ Portable (QoS)
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - v*.*.*
 
 jobs:
   build:
@@ -16,42 +13,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.4
-          cache: npm
-          cache-dependency-path: tools/bundleme-gui/package-lock.json
 
       - name: Ensure lockfile (deterministic)
-        working-directory: tools/bundleme-gui
         shell: pwsh
+        working-directory: tools/bundleme-gui
         run: |
           if (-not (Test-Path package-lock.json)) {
             npm install --package-lock-only --no-audit --no-fund
           }
 
       - name: Install deps
-        working-directory: tools/bundleme-gui
         shell: pwsh
+        working-directory: tools/bundleme-gui
         run: npm ci --no-audit --no-fund
 
       - name: Smoke — package.json loads
-        working-directory: tools/bundleme-gui
         shell: pwsh
+        working-directory: tools/bundleme-gui
         run: node -e "require('./package.json'); console.log('package.json OK')"
 
-      - name: Show electron-builder version
-        working-directory: tools/bundleme-gui
-        shell: pwsh
-        run: npx electron-builder --version
-
       - name: Build portable
-        working-directory: tools/bundleme-gui
         shell: pwsh
-        env:
-          DEBUG: electron-builder
+        working-directory: tools/bundleme-gui
         run: npm run build:win
 
       - name: Verify dist
-        working-directory: tools/bundleme-gui
         shell: pwsh
+        working-directory: tools/bundleme-gui
         run: |
           if (-not (Test-Path dist)) { throw 'dist/ not created' }
           $exe = Get-ChildItem -Path dist -Filter *.exe -ErrorAction SilentlyContinue
@@ -64,10 +52,3 @@ jobs:
           name: CommentHQ-BundleMe-GUI
           path: tools/bundleme-gui/dist/*.exe
           if-no-files-found: error
-
-      - name: Release on tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: tools/bundleme-gui/dist/*.exe
-          generate_release_notes: true
