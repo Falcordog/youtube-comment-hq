@@ -1,0 +1,80 @@
+name: Repo Snapshot (SNAP)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+jobs:
+  snap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect snapshot
+        id: collect
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Repo core
+            const { data: repo } = await github.rest.repos.get({
+              owner: context.repo.owner, repo: context.repo.repo
+            });
+
+            // Last 3 open PRs
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', per_page: 3
+            });
+
+            // Last 10 workflow runs
+            const { data: runsData } = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, per_page: 10
+            });
+            const runs = runsData.workflow_runs || [];
+
+            // Releases
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner, repo: context.repo.repo, per_page: 10
+            });
+
+            // Workflows present
+            let present = [];
+            try {
+              const { data: wf } = await github.rest.repos.getContent({
+                owner: context.repo.owner, repo: context.repo.repo,
+                path: '.github/workflows', ref: repo.default_branch
+              });
+              const names = Array.isArray(wf) ? wf.map(x => x.name) : [];
+              const want = ['commenthq-portable.yml','toggle-visibility.yml','repo-snapshot.yml','ci-migrate-disable-legacy.yml'];
+              present = want.filter(w => names.includes(w));
+            } catch (e) { /* folder may not exist */ }
+
+            const snapshot = {
+              generatedAt: new Date().toISOString(),
+              repo,
+              prs,
+              runs,
+              releases,
+              canonicalWorkflowsPresent: present
+            };
+
+            fs.writeFileSync('SNAPSHOT.json', JSON.stringify(snapshot, null, 2));
+            const md = [
+              `# Repo SNAPSHOT — ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Melbourne' })}`,
+              '',
+              '```json',
+              JSON.stringify(snapshot, null, 2),
+              '```'
+            ].join('\n');
+            fs.writeFileSync('SNAPSHOT.md', md);
+      - name: Upload snapshot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-snapshot
+          path: |
+            SNAPSHOT.json
+            SNAPSHOT.md
+      - name: Job summary
+        run: |
+          cat SNAPSHOT.md >> "$GITHUB_STEP_SUMMARY"
