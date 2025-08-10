@@ -1,0 +1,35 @@
+name: Toggle Repo Visibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      visibility:
+        description: "public or private"
+        required: true
+        default: "public"
+      delayMinutes:
+        description: "Delay before revert (minutes, optional)"
+        required: false
+        default: ""
+
+jobs:
+  toggle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Change visibility
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+          VISIBILITY: ${{ github.event.inputs.visibility }}
+          DELAY: ${{ github.event.inputs.delayMinutes }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          if [ -n "$DELAY" ] && [ "$VISIBILITY" = "public" ]; then
+            echo "Delaying change by $DELAY minutes..."
+            sleep "${DELAY}m"
+          fi
+          echo "Setting $OWNER/$REPO to $VISIBILITY"
+          gh api \
+            -X PATCH \
+            "repos/$OWNER/$REPO" \
+            -f visibility="$VISIBILITY"
