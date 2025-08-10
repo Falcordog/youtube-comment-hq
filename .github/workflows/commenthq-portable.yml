@@ -1,57 +1,61 @@
-name: CommentHQ Portable (CI Live — QoS)
+name: CommentHQ Portable (QoS)
 
 on:
   workflow_dispatch:
   push:
-    tags: ['v*.*.*']
+    tags:
+      - v*.*.*
 
 jobs:
-  win-portable:
+  build:
     runs-on: windows-2022
-    defaults:
-      run:
-        shell: pwsh
-        working-directory: tools/bundleme-gui
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node (pinned)
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.4'
+          node-version: 20.19.4
           cache: npm
           cache-dependency-path: tools/bundleme-gui/package-lock.json
 
       - name: Ensure lockfile (deterministic)
+        working-directory: tools/bundleme-gui
+        shell: pwsh
         run: |
           if (-not (Test-Path package-lock.json)) {
             npm install --package-lock-only --no-audit --no-fund
           }
 
-      - name: Install deps (ci)
+      - name: Install deps
+        working-directory: tools/bundleme-gui
+        shell: pwsh
         run: npm ci --no-audit --no-fund
 
       - name: Smoke — package.json loads
+        working-directory: tools/bundleme-gui
+        shell: pwsh
         run: node -e "require('./package.json'); console.log('package.json OK')"
 
       - name: Show electron-builder version
+        working-directory: tools/bundleme-gui
+        shell: pwsh
         run: npx electron-builder --version
 
-      - name: Build EXE (portable)
+      - name: Build portable
+        working-directory: tools/bundleme-gui
+        shell: pwsh
         env:
           DEBUG: electron-builder
         run: npm run build:win
 
-      - name: Verify dist and list
+      - name: Verify dist
+        working-directory: tools/bundleme-gui
+        shell: pwsh
         run: |
           if (-not (Test-Path dist)) { throw 'dist/ not created' }
           $exe = Get-ChildItem -Path dist -Filter *.exe -ErrorAction SilentlyContinue
-          if (-not $exe) {
-            Write-Host "No EXE produced. Dist contents:"
-            if (Test-Path dist) { Get-ChildItem -Recurse dist | Format-List }
-            throw "No .exe in dist/"
-          }
+          if (-not $exe) { throw 'No .exe produced in dist/' }
           Get-ChildItem -Force dist
 
       - name: Upload artifact
