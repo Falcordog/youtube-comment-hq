@@ -1,0 +1,26 @@
+name: Make Repo Public
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  toggle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make public
+        env:
+          GH_PAT: ${{ secrets.REPO_ADMIN_TOKEN }}
+          REPO_FULL: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_PAT" ]; then echo "Missing REPO_ADMIN_TOKEN secret"; exit 1; fi
+          OWNER="${REPO_FULL%%/*}"
+          REPO="${REPO_FULL##*/}"
+          curl -sS -X PATCH \
+            -H "Authorization: token $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$OWNER/$REPO" \
+            -d '{"private": false}'
