@@ -1,0 +1,38 @@
+name: Build CommentHQ Portable (QoS)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20.19.4
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+
+      - name: Smoke check package.json
+        run: node -e "require('./package.json')"
+
+      - name: Install deps (ci)
+        run: npm ci
+
+      - name: Build GUI
+        run: npm run build
+
+      - name: List dist contents
+        run: Get-ChildItem -Recurse dist
+
+      - name: Upload portable exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: CommentHQ-Portable
+          path: dist/*.exe
