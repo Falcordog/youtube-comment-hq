@@ -10,7 +10,7 @@ jobs:
         with:
           node-version: "20.19.4"
           cache: "npm"
-          cache-dependency-path: tools/bundleme-gui/package-lock.json
+          cache-dependency-path: '**/package-lock.json'
       - name: Ensure lockfile
         working-directory: tools/bundleme-gui
         run: |
