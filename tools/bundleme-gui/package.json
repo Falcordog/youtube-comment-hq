@@ -1,36 +1,7 @@
 {
-  "name": "commenthq-bundleme-gui",
-  "version": "0.7.0",
-  "private": true,
-  "description": "CommentHQ Bundle Me GUI (portable Windows builder)",
-  "author": "Falcordog",
-  "main": "main.js",
-  "scripts": {
-    "start": "electron .",
-    "build:win": "electron-builder --win portable --x64",
-    "pack": "electron-builder --dir"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "electron": "^30.5.1",
-    "electron-builder": "^24.13.3"
-  },
-  "build": {
-    "appId": "com.commenthq.bundleme",
-    "productName": "CommentHQ BundleMe GUI",
-    "asar": true,
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "main.js",
-      "preload.js",
-      "renderer/**/*",
-      "package.json"
-    ],
-    "win": {
-      "target": [ "portable" ],
-      "artifactName": "CommentHQ-BundleMe-GUI-${version}-portable.exe"
-    }
-  }
-}
+  "name":"commenthq-bundleme-gui","version":"0.7.0","private":true,
+  "description":"CommentHQ Bundle Me GUI (portable Windows builder)","author":"Falcordog",
+  "main":"main.js","scripts":{"start":"electron .","build:win":"electron-builder --win portable --x64","pack":"electron-builder --dir"},
+  "dependencies":{},"devDependencies":{"electron":"30.0.10","electron-builder":"26.0.12"},
+  "build":{"appId":"com.commenthq.bundleme","productName":"CommentHQ BundleMe GUI","asar":true,"directories":{"output":"dist"},
+  "files":["main.js","preload.js","renderer/**/*","package.json"],"win":{"target":["portable"],"artifactName":"CommentHQ-BundleMe-GUI-${version}-portable.exe"}}}

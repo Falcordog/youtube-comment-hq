@@ -1,3 +1,1 @@
-window.addEventListener('DOMContentLoaded', () => {
-  // placeholder
-});
+window.addEventListener('DOMContentLoaded',()=>{});
