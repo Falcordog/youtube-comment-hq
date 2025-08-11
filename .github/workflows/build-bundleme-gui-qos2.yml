@@ -1,4 +1,4 @@
-name: Build BundleMe GUI (QoS, manual)
+name: Build BundleMe GUI (QoS2, manual)
 
 on:
   workflow_dispatch:
