@@ -1,26 +1,50 @@
-name: Make Repo Public
+name: Make Repo Public (manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      auto_reprivate_minutes:
+        description: "Auto-make private after N minutes (0 = disabled)"
+        type: number
+        default: 0
+        required: true
 
 permissions:
-  contents: read
+  contents: write
+  administration: write
 
 jobs:
   toggle:
     runs-on: ubuntu-latest
     steps:
       - name: Make public
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.REPO_ADMIN_TOKEN }}
+          script: |
+            await github.rest.repos.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              private: false
+            });
+
+      - name: Maybe auto-reprivate after delay
+        if: ${{ inputs.auto_reprivate_minutes > 0 }}
         env:
-          GH_PAT: ${{ secrets.REPO_ADMIN_TOKEN }}
-          REPO_FULL: ${{ github.repository }}
+          MINUTES: ${{ inputs.auto_reprivate_minutes }}
         run: |
-          if [ -z "$GH_PAT" ]; then echo "Missing REPO_ADMIN_TOKEN secret"; exit 1; fi
-          OWNER="${REPO_FULL%%/*}"
-          REPO="${REPO_FULL##*/}"
-          curl -sS -X PATCH \
-            -H "Authorization: token $GH_PAT" \
-            -H "Accept: application/vnd.github+json" \
-            -H "Content-Type: application/json" \
-            "https://api.github.com/repos/$OWNER/$REPO" \
-            -d '{"private": false}'
+          echo "Sleeping for $MINUTES minute(s) before auto-private..."
+          sleep $(( MINUTES * 60 ))
+        shell: bash
+
+      - name: Auto re-private
+        if: ${{ inputs.auto_reprivate_minutes > 0 }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.REPO_ADMIN_TOKEN }}
+          script: |
+            await github.rest.repos.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              private: true
+            });
