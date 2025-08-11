@@ -1,8 +1,102 @@
 name: Build BundleMe GUI (QoS2, manual)
+
 on:
   workflow_dispatch:
+    inputs:
+      release_on_success:
+        description: "Create a GitHub Release and attach the EXE"
+        type: boolean
+        default: false
+        required: true
+
 jobs:
-  ping:
-    runs-on: ubuntu-latest
+  build-windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/bundleme-gui
+
     steps:
-      - run: echo "ok"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20.19.4 (with npm cache)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+          cache: "npm"
+          cache-dependency-path: tools/bundleme-gui/package-lock.json
+
+      - name: Ensure lockfile (deterministic install)
+        run: |
+          if (-not (Test-Path package-lock.json)) {
+            npm install --package-lock-only --no-audit --no-fund
+          }
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Smoke: package.json parse + builder version
+        run: |
+          node -e "require('./package.json'); console.log('package.json OK')"
+          npx electron-builder --version
+
+      - name: Build portable EXE
+        env:
+          DEBUG: electron-builder
+        run: |
+          if (Test-Path .\node_modules\.bin\electron-builder.cmd) {
+            .\node_modules\.bin\electron-builder.cmd --win portable --x64
+          } else {
+            npx electron-builder --win portable --x64
+          }
+
+      - name: Verify dist & capture version
+        id: meta
+        run: |
+          if (-not (Test-Path dist)) { throw "dist/ not created" }
+          $exe = Get-ChildItem -Path dist -Filter *.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw "No .exe in dist/" }
+          $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "ver=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Built version: $ver"
+          Get-ChildItem -Force dist
+
+      - name: SHA-256 sidecar JSON
+        id: sha
+        run: |
+          $exe = Get-ChildItem -Path dist -Filter *.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw "No .exe in dist/" }
+          $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $exe.FullName
+          $meta = [pscustomobject]@{
+            file            = $exe.Name
+            path            = $exe.FullName
+            sha256          = $hash.Hash
+            productVersion  = (Get-Content package.json -Raw | ConvertFrom-Json).version
+            builtAt         = (Get-Date).ToString("o")
+            os              = $env:RUNNER_OS
+            nodeVersion     = (node -v)
+            npmVersion      = (npm -v)
+          }
+          $out = Join-Path $exe.DirectoryName ("GUI-scan-" + $exe.Name + ".json")
+          $meta | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $out -Encoding UTF8
+          "json=$out" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload artifacts (EXE + sidecar JSON)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CommentHQ-BundleMe-GUI-${{ steps.meta.outputs.ver }}-portable
+          path: |
+            tools/bundleme-gui/dist/*.exe
+            ${{ steps.sha.outputs.json }}
+          if-no-files-found: error
+
+      - name: Release (optional)
+        if: ${{ inputs.release_on_success }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            tools/bundleme-gui/dist/*.exe
+            ${{ steps.sha.outputs.json }}
+          generate_release_notes: true
