@@ -1,1 +1,1 @@
-console.log("BundleMe GUI loaded");
+console.log('BundleMe GUI loaded');
