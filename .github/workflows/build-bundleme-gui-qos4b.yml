@@ -1,0 +1,61 @@
+name: Build BundleMe GUI (QoS4B, full)
+on:
+  workflow_dispatch:
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+          cache: "npm"
+          cache-dependency-path: tools/bundleme-gui/package-lock.json
+      - name: Ensure lockfile
+        working-directory: tools/bundleme-gui
+        run: |
+          if (-not (Test-Path package-lock.json)) {
+            npm install --package-lock-only --no-audit --no-fund
+          }
+      - name: Install deps
+        working-directory: tools/bundleme-gui
+        run: npm ci --no-audit --no-fund
+      - name: Smoke
+        working-directory: tools/bundleme-gui
+        run: |
+          node -e "require('./package.json'); console.log('package.json OK')"
+          npx electron-builder --version
+      - name: Build EXE
+        working-directory: tools/bundleme-gui
+        env: { DEBUG: electron-builder }
+        run: |
+          if (Test-Path .\node_modules\.bin\electron-builder.cmd) { .\node_modules\.bin\electron-builder.cmd --win portable --x64 } else { npx electron-builder --win portable --x64 }
+      - name: Meta
+        id: meta
+        working-directory: tools/bundleme-gui
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist)) { throw "dist/ not created" }
+          $exe = Get-ChildItem dist -Filter *.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) { throw "No .exe in dist/" }
+          $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          echo "ver=$ver" >> $env:GITHUB_OUTPUT
+      - name: SHA-256 sidecar
+        id: sha
+        working-directory: tools/bundleme-gui
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist -Filter *.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $exe.FullName
+          $meta = [pscustomobject]@{ file=$exe.Name; sha256=$hash.Hash; productVersion=(Get-Content package.json -Raw | ConvertFrom-Json).version; builtAt=(Get-Date).ToString("o"); os=$env:RUNNER_OS; nodeVersion=(node -v); npmVersion=(npm -v) }
+          $out = Join-Path $exe.DirectoryName ("GUI-scan-" + $exe.Name + ".json")
+          $meta | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $out -Encoding UTF8
+          echo "json=$out" >> $env:GITHUB_OUTPUT
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CommentHQ-BundleMe-GUI-portable
+          path: |
+            tools/bundleme-gui/dist/*.exe
+            ${{ steps.sha.outputs.json }}
+          if-no-files-found: error
