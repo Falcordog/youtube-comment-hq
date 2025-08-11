@@ -5,6 +5,9 @@ jobs:
   build-windows:
     runs-on: windows-2022
     steps:
+      - name: Ensure GUI_READY flag
+        run: echo "GUI_READY=${{ env.GUI_READY || 'true' }}" >> $GITHUB_ENV
+
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -20,10 +23,10 @@ jobs:
       - name: Install deps
         working-directory: tools/bundleme-gui
         run: npm ci --no-audit --no-fund
-- name: Minimal UI smoke test
-  working-directory: tools/bundleme-gui
-  run: |
-    node -e "const { app, BrowserWindow } = require('electron'); console.log('Electron import OK')"
+      - name: Minimal UI smoke test
+        working-directory: tools/bundleme-gui
+        run: |
+          node -e "const { app, BrowserWindow } = require('electron'); console.log('Electron import OK')"
       - name: Smoke
         working-directory: tools/bundleme-gui
         run: |
@@ -61,5 +64,5 @@ jobs:
           name: CommentHQ-BundleMe-GUI-portable
           path: |
             tools/bundleme-gui/dist/*.exe
-            `${{ steps.sha.outputs.json }}
+            ${{ steps.sha.outputs.json }}
           if-no-files-found: error
