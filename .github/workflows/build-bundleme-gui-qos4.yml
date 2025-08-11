@@ -1,0 +1,17 @@
+name: Build BundleMe GUI (QoS4, probe)
+on:
+  workflow_dispatch:
+jobs:
+  win:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node probe
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+      - name: Echo
+        run: |
+          node -v
+          echo ok
