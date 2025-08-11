@@ -1,39 +1,21 @@
-name: Toggle Visibility
-
+name: Toggle Repo Visibility
 on:
   workflow_dispatch:
     inputs:
-      visibility:
-        type: choice
-        options: [public, private]
+      action:
+        description: 'Make repo public or private'
         required: true
-      delayMinutes:
-        description: "Optional delay before applying (minutes)"
-        required: false
-
-permissions:
-  contents: read
+        default: 'private'
+        type: choice
+        options:
+          - public
+          - private
 
 jobs:
   toggle:
     runs-on: ubuntu-latest
     steps:
-      - name: Optional delay
-        if: ${{ github.event.inputs.delayMinutes && github.event.inputs.delayMinutes != '' }}
-        run: sleep $(( 60 * ${{ github.event.inputs.delayMinutes }} ))
-
-      - name: Apply visibility via REST
-        env:
-          GH_PAT: ${{ secrets.REPO_ADMIN_TOKEN }}
-          REPO_FULL: ${{ github.repository }}
-          VIS: ${{ github.event.inputs.visibility }}
+      - name: Toggle visibility
         run: |
-          if [ -z "$GH_PAT" ]; then echo "Missing REPO_ADMIN_TOKEN secret"; exit 1; fi
-          OWNER="${REPO_FULL%%/*}"
-          REPO="${REPO_FULL##*/}"
-          if [ "$VIS" = "public" ]; then JSON='{"private": false}'; else JSON='{"private": true}'; fi
-          curl -sS -X PATCH \
-            -H "Authorization: token $GH_PAT" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$OWNER/$REPO" \
-            -d "$JSON" | jq -r '.private'
+          echo "Toggling repo visibility to {{ github.event.inputs.action }}"
+          gh repo edit {{ github.repository }} --visibility {{ github.event.inputs.action }}
