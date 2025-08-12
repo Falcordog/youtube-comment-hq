@@ -1,92 +1,10 @@
-name: Build CommentHQ — Minimal Pinned
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [ "main" ]
-    paths:
-      - ".github/workflows/build-commenthq-minimal-pinned.yml"
-      - "package.json"
-      - "package-lock.json"
-      - "src-tauri/**"
-      - "app/**"
-      - "tools/ci/**"
-
-permissions:
-  contents: read
-
-env:
-  NODE_VERSION: "20.19.4"
-
-jobs:
-  build-windows:
-    runs-on: windows-2022
-    timeout-minutes: 35
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-
-      - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install NSIS (for Windows bundling)
-        shell: pwsh
-        run: |
-          choco install nsis -y
-          $env:Path = "$env:ProgramFiles\NSIS;$env:Path"
-
-      - name: GUI_READY guard
-        shell: pwsh
-        run: |
-          ./tools/ci/gui-ready-check.ps1
-
-      - name: Install JS deps (deterministic)
-        shell: pwsh
-        run: |
-          if (Test-Path package-lock.json) {
-            npm ci
-          } else {
-            Write-Error "package-lock.json missing. Commit a lockfile to ensure deterministic installs."
-          }
-
-      - name: Build Tauri (Windows)
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: "."
-          args: "--target x86_64-pc-windows-msvc"
-
-      - name: Collect artifacts
-        id: collect
-        shell: pwsh
-        run: |
-          $bundle = Join-Path "src-tauri" "target\release\bundle"
-          if (!(Test-Path $bundle)) {
-            Write-Error "Expected bundle directory not found at $bundle"
-          }
-          Write-Host "Bundle path: $bundle"
-          echo "bundle=$bundle" >> $env:GITHUB_OUTPUT
-
-      - name: Generate SHA256.json
-        shell: pwsh
-        run: |
-          ./tools/ci/sha256.ps1 -InputDir "${{ steps.collect.outputs.bundle }}" -OutFile "SHA256.json"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: CommentHQ-windows-build
-          path: |
-            ${{ steps.collect.outputs.bundle }}/**
-            SHA256.json
-          if-no-files-found: error
+- name: GUI Ready Check (inline)
+  shell: pwsh
+  run: |
+    $ErrorActionPreference = 'Stop'
+    function Fail($m){ Write-Host "::error:: $m"; throw $m }
+    if (!(Test-Path package.json)) { Fail "package.json missing at repo root." }
+    if (!(Test-Path package-lock.json)) { Fail "package-lock.json missing (required for npm ci)." }
+    if (!(Test-Path src-tauri/tauri.conf.json)) { Fail "src-tauri/tauri.conf.json missing." }
+    if (!(Test-Path tools/bundleme-gui)) { Write-Host "::warning:: tools/bundleme-gui not found (not fatal)." }
+    Write-Host "GUI_READY = TRUE"
