@@ -1,68 +1,92 @@
-name: Build BundleMe GUI (QoS4B, full)
+name: Build BundleMe GUI (QoS4B, minimal, pinned)
+
 on:
   workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/build-bundleme-gui-qos4b.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "src-tauri/**"
+      - "app/**"
+      - "tools/ci/**"
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20.19.4"
+
 jobs:
   build-windows:
     runs-on: windows-2022
-    steps:
-      - name: Ensure GUI_READY flag
-        run: echo "GUI_READY=${{ env.GUI_READY || 'true' }}" >> $GITHUB_ENV
+    timeout-minutes: 35
 
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          node-version: "20.19.4"
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: '**/package-lock.json'
-      - name: Ensure lockfile
-        working-directory: tools/bundleme-gui
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install NSIS (for Windows bundling)
+        shell: pwsh
         run: |
-          if (-not (Test-Path package-lock.json)) {
-            npm install --package-lock-only --no-audit --no-fund
+          choco install nsis -y
+          $env:Path = "$env:ProgramFiles\NSIS;$env:Path"
+
+      - name: GUI_READY guard
+        shell: pwsh
+        run: |
+          ./tools/ci/gui-ready-check.ps1
+
+      - name: Install JS deps (deterministic)
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) {
+            npm ci
+          } else {
+            Write-Error "package-lock.json missing. Commit lockfile to ensure deterministic installs."
           }
-      - name: Install deps
-        working-directory: tools/bundleme-gui
-        run: npm ci --no-audit --no-fund
-      - name: Minimal UI smoke test
-        working-directory: tools/bundleme-gui
-        run: |
-          node -e "const { app, BrowserWindow } = require('electron'); console.log('Electron import OK')"
-      - name: Smoke
-        working-directory: tools/bundleme-gui
-        run: |
-          node -e "require('./package.json'); console.log('package.json OK')"
-          npx electron-builder --version
-      - name: Build EXE
-        working-directory: tools/bundleme-gui
-        env: { DEBUG: electron-builder }
-        run: |
-          if (Test-Path .\node_modules\.bin\electron-builder.cmd) { .\node_modules\.bin\electron-builder.cmd --win portable --x64 } else { npx electron-builder --win portable --x64 }
-      - name: Meta
-        id: meta
-        working-directory: tools/bundleme-gui
+
+      - name: Build Tauri (Windows)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: "."
+          args: "--target x86_64-pc-windows-msvc"
+
+      - name: Collect artifacts
+        id: collect
         shell: pwsh
         run: |
-          if (-not (Test-Path dist)) { throw "dist/ not created" }
-          $exe = Get-ChildItem dist -Filter *.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $exe) { throw "No .exe in dist/" }
-          $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          echo "ver=$ver" >> $env:GITHUB_OUTPUT
-      - name: SHA-256 sidecar
-        id: sha
-        working-directory: tools/bundleme-gui
+          $bundle = Join-Path "src-tauri" "target\release\bundle"
+          if (!(Test-Path $bundle)) {
+            Write-Error "Expected bundle directory not found at $bundle"
+          }
+          Write-Host "Bundle path: $bundle"
+          echo "bundle=$bundle" >> $env:GITHUB_OUTPUT
+
+      - name: Generate SHA256.json
         shell: pwsh
         run: |
-          $exe = Get-ChildItem dist -Filter *.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $exe.FullName
-          $meta = [pscustomobject]@{ file=$exe.Name; sha256=$hash.Hash; productVersion=(Get-Content package.json -Raw | ConvertFrom-Json).version; builtAt=(Get-Date).ToString("o"); os=$env:RUNNER_OS; nodeVersion=(node -v); npmVersion=(npm -v) }
-          $out = Join-Path $exe.DirectoryName ("GUI-scan-" + $exe.Name + ".json")
-          $meta | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $out -Encoding UTF8
-          echo "json=$out" >> $env:GITHUB_OUTPUT
-      - name: Upload artifacts
+          ./tools/ci/sha256.ps1 -InputDir "${{ steps.collect.outputs.bundle }}" -OutFile "SHA256.json"
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CommentHQ-BundleMe-GUI-portable
+          name: CommentHQ-windows-build
           path: |
-            tools/bundleme-gui/dist/*.exe
-            ${{ steps.sha.outputs.json }}
+            ${{ steps.collect.outputs.bundle }}/**
+            SHA256.json
           if-no-files-found: error
