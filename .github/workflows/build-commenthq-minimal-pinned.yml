@@ -55,11 +55,50 @@ jobs:
           if (!(Test-Path tools/bundleme-gui)) { Write-Host "::warning:: tools/bundleme-gui not found (not fatal)." }
           Write-Host "GUI_READY = TRUE"
 
+      # ---------- Deterministic installs (root + optional app/) ----------
       - name: Install JS deps (deterministic)
         shell: pwsh
         run: |
-          npm ci
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path package-lock.json) { npm ci } else { Write-Host "::warning:: No root package-lock.json" }
+          if (Test-Path app/package.json) {
+            if (Test-Path app/package-lock.json) { npm ci --prefix app } else { Write-Host "::warning:: app/package-lock.json missing" }
+          }
 
+      # ---------- Self-healing frontend build (root or app/) ----------
+      - name: Build frontend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function TryRun($cmd){
+            Write-Host ">> $cmd"
+            cmd /c $cmd
+            if ($LASTEXITCODE -ne 0) { Write-Host "::warning:: command failed: $cmd (code $LASTEXITCODE)" }
+            return $LASTEXITCODE
+          }
+          $code = 1
+          if (Test-Path package.json) { $code = TryRun "npm run build" }
+          if ($code -ne 0 -and (Test-Path app/package.json)) { $code = TryRun "npm run build --prefix app" }
+          if ($code -ne 0) { throw "No usable build script found at root or app/. Add one or adjust this step." }
+
+      # ---------- Verify dist exists (common locations) ----------
+      - name: Verify dist exists
+        id: distcheck
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidates = @("dist","app/dist","packages/app/dist")
+          $found = $null
+          foreach ($c in $candidates) {
+            if (Test-Path $c) { $found = $c; break }
+          }
+          if (-not $found) {
+            throw "Frontend dist folder not found. Ensure your build outputs to one of: dist, app/dist, packages/app/dist; or update src-tauri/tauri.conf.json build.distDir accordingly."
+          }
+          Write-Host "Using dist at $found"
+          "dist=$found" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+
+      # ---------- Tauri build ----------
       - name: Build Tauri (Windows)
         uses: tauri-apps/tauri-action@v0
         env:
@@ -68,6 +107,7 @@ jobs:
           projectPath: "."
           args: "--target x86_64-pc-windows-msvc"
 
+      # ---------- Locate bundle ----------
       - name: Locate bundle
         id: collect
         shell: pwsh
@@ -77,9 +117,9 @@ jobs:
             Write-Error "Expected bundle directory not found at $bundle"
           }
           Write-Host "Bundle path: $bundle"
-          echo "bundle=$bundle" >> $env:GITHUB_OUTPUT
+          "bundle=$bundle" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
 
-      # ---------- Inline SHA256: no external files required ----------
+      # ---------- Inline SHA256 ----------
       - name: Generate SHA256.json (inline)
         shell: pwsh
         run: |
